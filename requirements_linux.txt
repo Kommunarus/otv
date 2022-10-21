@@ -1,0 +1,17 @@
+geopandas
+matplotlib
+numpy
+opencv-python
+pandas
+Pillow
+progressbar33
+shapely
+torch
+torchvision
+
+# YOLOv5
+requests
+PyYAML
+tqdm
+seaborn
+albumentations
