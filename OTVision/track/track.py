@@ -95,7 +95,7 @@ def main(
             )
 
             log.info("Detections tracked")
-            clastering = True
+            clastering = False
             if clastering:
                 tracks_px = dbscan(tracks_px)
             # print(bad_id)

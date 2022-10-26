@@ -1,6 +1,7 @@
 """
 OTVision module to track road users in frames detected by OTVision
 """
+import copy
 import random
 
 import numpy as np
@@ -161,9 +162,9 @@ def track_iou(
 
         # kav 200922
         if len(dets) > 0:
-            # if frame_num in ['2075',]:
-            #     pass
-            n_points = 10
+            if frame_num in ['421',]:
+                pass
+            n_points = 5
             for_del = []
             for_del_det = []
             for iq, det in enumerate(dets):
@@ -184,12 +185,12 @@ def track_iou(
                             break
                         w_track = trakk['bboxes'][kk][2] - trakk['bboxes'][kk][0]
                         h_track = trakk['bboxes'][kk][3] - trakk['bboxes'][kk][1]
-                        if not (det['w'] * 0.5 < w_track < det['w'] * 2 and
-                                det['h'] * 0.5 < h_track < det['h'] * 2):
-                            continue
-                        # if not (w_track * 0.5 < det['w'] < w_track * 2 and
-                        #         h_track * 0.5 < det['h'] < h_track * 2):
-                        #     continue
+
+                        diff_box = True
+                        if diff_box:
+                            if not (det['w'] * 0.5 < w_track < det['w'] * 2 and
+                                    det['h'] * 0.5 < h_track < det['h'] * 2):
+                                continue
 
                         fnim = trakk["features"][kk]
                         im1 = torch.from_numpy(np.array(fnim))
@@ -270,7 +271,7 @@ def track_iou(
                     # remove best matching detection from detections
                     # del dets[dets.index(best_match)]
                     for_del_det.append(dets.index(best_match))
-                    for_del.append(trakk)
+                    for_del.append(best_track)
 
                     # best_match["vehID"] = track["vehID"]
                     best_match["first"] = False
@@ -294,8 +295,8 @@ def track_iou(
 
                     print('frame {}. Best track id {}, score {:.03f}'.format(frame_num, id_tr, score_tr))
 
-                for fd in for_del:
-                    saved_tracks.remove(fd)
+                for fd in sorted(for_del, reverse=True):
+                    del saved_tracks[fd]
                 for_del = []
             for fd in sorted(for_del_det, reverse=True):
                 del dets[fd]

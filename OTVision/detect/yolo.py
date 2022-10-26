@@ -91,6 +91,7 @@ def detect_video(
     cap = VideoCapture(file_path)
     batch_no = 0
     bb = 200
+    cur_bb = 0
 
     log.info(f"Run detection on video: {file_path}")
 
@@ -125,18 +126,20 @@ def detect_video(
             batch_no, t_start, t_trans, t_det, t_list, len(img_batch)
         )
         batch_no += 1
+        cur_bb += chunksize
 
         width = cap.get(3)  # float
         height = cap.get(4)  # float
         fps = cap.get(CAP_PROP_FPS)  # float
         frames = cap.get(7)  # float
 
-        _delete_small_detection(yolo_detections, width, height, normalized)  # kav 210922
-        img_batchs.append(img_batch)
-        if batch_no % bb == 0:
-            _add_detection_feature_results(yolo_detections_feature, yolo_detections[-bb:], img_batchs, model_siam,
-                                           normalized, width, height, dir_features, files_feature)
+        _delete_small_detection(yolo_detections, width, height, normalized, chunksize)  # kav 210922
+        img_batchs.extend(img_batch)
+        if cur_bb > bb:
+            _add_detection_feature_results(yolo_detections_feature, yolo_detections[-cur_bb:], img_batchs,
+                                           model_siam, normalized, width, height, dir_features, files_feature)
             img_batchs = []
+            cur_bb = 0
             n_f_f = 1
             dict_f_f = {}
             name_file = str(uuid.uuid4())
@@ -149,34 +152,32 @@ def detect_video(
                     dict_f_f = {}
                     name_file = str(uuid.uuid4())
                 n_f_f += 1
-            else:
-                if len(dict_f_f) != 0:
-                    with open(os.path.join(dir_features, name_file), "w") as f:
-                        json.dump(dict_f_f, f)
+
+            if len(dict_f_f) != 0:
+                with open(os.path.join(dir_features, name_file), "w") as f:
+                    json.dump(dict_f_f, f)
 
             files_feature = {}
         # if batch_no == 10000:
         #     break
 
-    else:
-        _add_detection_feature_results(yolo_detections_feature, yolo_detections[-len(img_batchs):], img_batchs, model_siam,
-                                       normalized, width, height, dir_features, files_feature)
-        n_f_f = 1
-        dict_f_f = {}
-        name_file = str(uuid.uuid4())
-        for k, v in files_feature.items():
-            list_f_f[k] = name_file
-            dict_f_f[k] = v
-            if n_f_f % 1000 == 0:
-                with open(os.path.join(dir_features, name_file), "w") as f:
-                    json.dump(dict_f_f, f)
-                dict_f_f = {}
-                name_file = str(uuid.uuid4())
-            n_f_f += 1
-        else:
-            if len(dict_f_f) != 0:
-                with open(os.path.join(dir_features, name_file), "w") as f:
-                    json.dump(dict_f_f, f)
+    _add_detection_feature_results(yolo_detections_feature, yolo_detections[-len(img_batchs):], img_batchs, model_siam,
+                                   normalized, width, height, dir_features, files_feature)
+    n_f_f = 1
+    dict_f_f = {}
+    name_file = str(uuid.uuid4())
+    for k, v in files_feature.items():
+        list_f_f[k] = name_file
+        dict_f_f[k] = v
+        if n_f_f % 1000 == 0:
+            with open(os.path.join(dir_features, name_file), "w") as f:
+                json.dump(dict_f_f, f)
+            dict_f_f = {}
+            name_file = str(uuid.uuid4())
+        n_f_f += 1
+    if len(dict_f_f) != 0:
+        with open(os.path.join(dir_features, name_file), "w") as f:
+            json.dump(dict_f_f, f)
 
         # saveimage(transformed_batch, yolo_detections, width, height, normalized, batch_no)
 
@@ -188,9 +189,11 @@ def detect_video(
     det_fps = len(yolo_detections) / duration
     _log_overall_performance_stats(duration, det_fps)
 
-    # class_names = results.names
-    class_names = {0: 'pedestrian', 1: 'bicycle', 2: 'car', 3: 'motorcycle', 5: 'bus',
-                   6: 'heavy vehicle', 4: 'medium vehicle'}
+    if weights in ['yolov5s', 'yolov5m', 'yolov5l', 'yolov5x']:
+        class_names = results.names
+    else:
+        class_names = {0: 'pedestrian', 1: 'bicycle', 2: 'car', 3: 'motorcycle', 5: 'bus',
+                       6: 'heavy vehicle', 4: 'medium vehicle'}
 
     det_config = _get_det_config(weights, conf, iou, size, chunksize, normalized)
     vid_config = _get_vidconfig(file_path, width, height, fps, frames)
@@ -346,53 +349,55 @@ def _add_detection_feature_results(yolo_detections_feature, yolo_detections, img
             x = x - w // 2
             y = y - h // 2
 
-            img = cv2.resize(img_batch[0][y: y+h, x: x+w, :], (90, 90))
+            img = cv2.resize(img_batch[y: y+h, x: x+w, :], (90, 90))
 
             all_obj.append(img)
 
-    all_obj_np = np.array(all_obj)
-    img_tensor = torch.from_numpy(all_obj_np.transpose((0, 3, 1, 2))).contiguous().to(torch.float).div(255)
-    # transformed_image1 = transform(img_tensor)
-    transformed_image1 = img_tensor.sub_(0.5).div_(0.5)
-    if torch.cuda.is_available():
-        transformed_image1 = transformed_image1.cuda()
-    else:
-        transformed_image1 = transformed_image1.cpu()
+    if len(all_obj) > 0:
+        all_obj_np = np.array(all_obj)
+        img_tensor = torch.from_numpy(all_obj_np.transpose((0, 3, 1, 2))).contiguous().to(torch.float).div(255)
+        # transformed_image1 = transform(img_tensor)
+        transformed_image1 = img_tensor.sub_(0.5).div_(0.5)
+        if torch.cuda.is_available():
+            transformed_image1 = transformed_image1.cuda()
+        else:
+            transformed_image1 = transformed_image1.cpu()
 
-    feat = model_siam.feature(transformed_image1)
-    # f_list = feat.tolist()[0]
-    n = 0
-    for frame in yolo_detections:
-        out = []
+        feat = model_siam.feature(transformed_image1)
+        # f_list = feat.tolist()[0]
+        n = 0
+        for frame in yolo_detections:
+            out = []
 
-        for _ in range(len(frame)):
+            for _ in range(len(frame)):
 
-            name_f = str(uuid.uuid4())
-            files_feature[name_f] = feat[n].tolist()
-            # with open(os.path.join(dir_features, name_f), "w") as f:
-            #     json.dump(feat[n].tolist(), f)
+                name_f = str(uuid.uuid4())
+                files_feature[name_f] = feat[n].tolist()
+                # with open(os.path.join(dir_features, name_f), "w") as f:
+                #     json.dump(feat[n].tolist(), f)
 
-            out.append(name_f)
-            n += 1
-        yolo_detections_feature.extend([out])
+                out.append(name_f)
+                n += 1
+            yolo_detections_feature.extend([out])
 
     # with open(os.path.join(dir_features, name_batch), "w") as f:
     #     json.dump(dict_features, f)
 
 
-def _delete_small_detection(yolo_detections, w, h, normalized):
-    end_row = yolo_detections[-1]
-    for_delete = []
-    for row in end_row:
-        if normalized:
-            if row[2] < 0.05 and row[3] < 0.05:
-                for_delete.append(row)
-        else:
-            if row[2] < w * 0.05 and row[3] < h * 0.05:
-                for_delete.append(row)
+def _delete_small_detection(yolo_detections, w, h, normalized, chunksize):
+    for i in range(chunksize):
+        end_row = yolo_detections[-(i+1)]
+        for_delete = []
+        for row in end_row:
+            if normalized:
+                if row[2] < 0.05 and row[3] < 0.05:
+                    for_delete.append(row)
+            else:
+                if row[2] < w * 0.05 and row[3] < h * 0.05:
+                    for_delete.append(row)
 
-    for row in for_delete:
-        end_row.remove(row)
+        for row in for_delete:
+            end_row.remove(row)
 
 
 def loadmodel(weights, conf, iou):
