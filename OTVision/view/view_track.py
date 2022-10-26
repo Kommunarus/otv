@@ -91,6 +91,15 @@ class FrameTrackOptions(tk.Frame):
         if CONFIG["TRACK"]["OVERWRITE"]:
             self.checkbutton_overwrite.select()
 
+        self.cluster_var = tk.BooleanVar()
+        self.cluster = tk.Checkbutton(
+            master=self, text="Clustering", variable=self.cluster_var
+        )
+        self.cluster.grid(row=7, column=0, columnspan=2, sticky="w")
+        if CONFIG["TRACK"]["CLUSTERING"]:
+            self.cluster.select()
+
+
 
 class FrameRunTracking(FrameRun):
     def __init__(self, **kwargs):
@@ -112,6 +121,7 @@ class FrameRunTracking(FrameRun):
         t_min = self.master.frame_options.scale_t_min.get()
         t_miss_max = self.master.frame_options.scale_t_miss_max.get()
         overwrite = self.master.frame_options.checkbutton_overwrite_var.get()
+        clustering = self.master.frame_options.cluster_var.get()
         track(
             paths=paths,
             sigma_l=sigma_l,
@@ -120,5 +130,6 @@ class FrameRunTracking(FrameRun):
             t_min=t_min,
             t_miss_max=t_miss_max,
             overwrite=overwrite,
+            clustering=clustering
         )
         self.master.master.frame_files.update_files_dict()

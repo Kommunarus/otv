@@ -46,6 +46,7 @@ def main(
     t_miss_max=CONFIG["TRACK"]["IOU"]["T_MISS_MAX"],
     overwrite=CONFIG["TRACK"]["OVERWRITE"],
     debug: bool = CONFIG["TRACK"]["DEBUG"],
+    clustering=CONFIG["TRACK"]["CLUSTERING"],
 ):
     log.info("Start tracking")
     if debug:
@@ -95,8 +96,7 @@ def main(
             )
 
             log.info("Detections tracked")
-            clastering = False
-            if clastering:
+            if clustering:
                 tracks_px = dbscan(tracks_px)
             # print(bad_id)
 
