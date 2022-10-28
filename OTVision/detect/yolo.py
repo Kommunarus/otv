@@ -112,7 +112,7 @@ def detect_video(
 
         t_trans = perf_counter()
 
-        # if batch_no == 477:
+        # if batch_no == 2445:
         #     pass
         results = model(transformed_batch, size)
 
@@ -379,6 +379,11 @@ def _add_detection_feature_results(yolo_detections_feature, yolo_detections, img
                 out.append(name_f)
                 n += 1
             yolo_detections_feature.extend([out])
+    else:
+        for _ in yolo_detections:
+            out = []
+            yolo_detections_feature.extend([out])
+
 
     # with open(os.path.join(dir_features, name_batch), "w") as f:
     #     json.dump(dict_features, f)
